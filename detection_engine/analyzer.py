@@ -1,7 +1,14 @@
 import json
 import os
 from google import genai
-from rules import analyze_rules
+try:
+    from rules import analyze_rules
+    from secret_scanner import scan_for_secrets
+    from dependency_scanner import scan_dependencies
+except ImportError:
+    from detection_engine.rules import analyze_rules
+    from detection_engine.secret_scanner import scan_for_secrets
+    from detection_engine.dependency_scanner import scan_dependencies
 
 # Load environment variables if available
 try:
@@ -17,7 +24,6 @@ def get_llm_score(text: str) -> dict:
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("[WARNING] GEMINI_API_KEY not found. Using Mock LLM Score.")
         return {"score": 0, "flags": []}
     
     try:
@@ -37,7 +43,6 @@ def get_llm_score(text: str) -> dict:
             contents=prompt
         )
         
-        # Clean markdown formatting if model wraps JSON in it
         result_text = response.text.strip().strip("`").removeprefix("json").strip()
         result_data = json.loads(result_text)
         
@@ -50,26 +55,36 @@ def get_llm_score(text: str) -> dict:
             
         return {"score": score, "flags": flags}
     except Exception as e:
-        print(f"[ERROR] LLM Classifier failed: {e}")
+        # LLM failed, silently fallback to Regex Rules
         return {"score": 0, "flags": []}
 
 def analyze_input(source_type: str, content: str) -> dict:
     """
-    Main detection logic for Person A.
-    Analyzes untrusted text and outputs a risk score and verdict.
+    Main detection logic combining Rules, LLM, Secrets, and Dependencies.
     """
     # 1. Run rule-based checks
     rule_results = analyze_rules(content)
     
-    # 2. Run LLM checks (for nuanced manipulation attempts)
+    # 2. Run Secret Scanner
+    secret_results = scan_for_secrets(content)
+    
+    # 3. Run Dependency Scanner
+    dep_results = scan_dependencies(content, source_type)
+    
+    # 4. Run LLM checks (for nuanced manipulation attempts)
     llm_results = get_llm_score(content)
     
-    # 3. Combine scores (Max of both)
-    final_score = max(rule_results["score"], llm_results["score"])
+    # Combine scores (Max of all engines ensures critical threats are blocked)
+    final_score = max(
+        rule_results["score"], 
+        llm_results["score"],
+        secret_results["score"],
+        dep_results["score"]
+    )
     
-    # Combine flags
-    all_flags = rule_results["flags"] + llm_results["flags"]
-    flag_types = [f["type"] for f in all_flags]
+    # Combine all flags
+    all_flags = rule_results["flags"] + llm_results["flags"] + secret_results["flags"] + dep_results["flags"]
+    flag_types = list(set([f["type"] for f in all_flags]))
     
     # Generate Explanation
     explanations = [f["reason"] for f in all_flags]
@@ -80,7 +95,7 @@ def analyze_input(source_type: str, content: str) -> dict:
     if final_score >= 80:
         verdict = "block"
     elif final_score >= 50:
-        verdict = "sandbox" # Or sanitize
+        verdict = "sandbox"
         
     return {
         "source_type": source_type,
