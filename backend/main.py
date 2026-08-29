@@ -113,6 +113,29 @@ async def clear_all_logs():
     conn.close()
     return {"message": "All logs cleared"}
 
+@app.post("/api/logs/{log_id}/fix")
+async def fix_and_rerun(log_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    # Get the log
+    c.execute('SELECT * FROM logs WHERE id = ?', (log_id,))
+    row = c.fetchone()
+    
+    if row and row["sanitized_content"]:
+        # Update it to be allowed with the sanitized content
+        new_snippet = row["sanitized_content"][:100] + "..." if len(row["sanitized_content"]) > 100 else row["sanitized_content"]
+        c.execute('''
+            UPDATE logs 
+            SET verdict = 'allow', risk_score = 0, flags = 'SANITIZED_BY_ADMIN', explanation = 'Content was sanitized and manually approved.', content_snippet = ?
+            WHERE id = ?
+        ''', (new_snippet, log_id))
+        conn.commit()
+    
+    conn.close()
+    return {"message": "Log fixed and allowed"}
+
 if __name__ == "__main__":
     print("Starting RepoSentinel Backend API on port 8000...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
