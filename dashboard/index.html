@@ -151,9 +151,16 @@
 
         function renderLogs(logs) {
             const tbody = document.getElementById('logs-body');
-            if (logs.length === 0) return;
-
             tbody.innerHTML = '';
+
+            if (logs.length === 0) {
+                tbody.innerHTML = `
+                    <tr><td colspan="6" class="p-8 text-center text-gray-500 font-bold tracking-widest border border-dashed border-gray-700 bg-[#0d1117] uppercase">
+                        ✅ Dashboard is clean. No threats detected.
+                    </td></tr>
+                `;
+                return;
+            }
             
             logs.forEach(log => {
                 const tr = document.createElement('tr');

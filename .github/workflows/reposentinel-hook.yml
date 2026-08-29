@@ -28,8 +28,10 @@ jobs:
 
       - name: Send to RepoSentinel Core (Local Engine)
         run: |
-          # Get the Ngrok URL from GitHub Repository Variables
-          API_URL="${{ vars.REPOSENTINEL_API_URL }}/api/analyze"
+          # Get the Ngrok URL from GitHub Repository Variables and remove trailing slash if any
+          BASE_URL="${{ vars.REPOSENTINEL_API_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          API_URL="${BASE_URL}/api/analyze"
           
           if [ -z "${{ vars.REPOSENTINEL_API_URL }}" ]; then
             echo "::warning::REPOSENTINEL_API_URL is not set in GitHub Variables. Skipping scan."
