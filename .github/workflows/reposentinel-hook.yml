@@ -1,0 +1,74 @@
+name: RepoSentinel AI Firewall
+
+on:
+  issues:
+    types: [opened, edited]
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  reposentinel-scan:
+    name: Inspect Untrusted Input
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract Payload from GitHub
+        id: extract
+        run: |
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            echo "PAYLOAD<<EOF" >> $GITHUB_ENV
+            echo "${{ github.event.issue.body }}" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+            echo "SOURCE_TYPE=github_issue" >> $GITHUB_ENV
+          else
+            echo "PAYLOAD<<EOF" >> $GITHUB_ENV
+            echo "${{ github.event.pull_request.body }}" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+            echo "SOURCE_TYPE=pull_request" >> $GITHUB_ENV
+          fi
+
+      - name: Send to RepoSentinel Core (Local Engine)
+        run: |
+          # Get the Ngrok URL from GitHub Repository Variables
+          API_URL="${{ vars.REPOSENTINEL_API_URL }}/api/analyze"
+          
+          if [ -z "${{ vars.REPOSENTINEL_API_URL }}" ]; then
+            echo "::warning::REPOSENTINEL_API_URL is not set in GitHub Variables. Skipping scan."
+            exit 0
+          fi
+          
+          echo "🛡️ RepoSentinel Interception Layer Activated..."
+          
+          # Securely create JSON payload
+          JSON_PAYLOAD=$(jq -n --arg src "$SOURCE_TYPE" --arg content "$PAYLOAD" '{source_type: $src, content: $content}')
+          
+          # Send data to our local FastAPI server via Ngrok
+          RESPONSE=$(curl -s -X POST $API_URL -H "Content-Type: application/json" -d "$JSON_PAYLOAD")
+          
+          # If connection failed
+          if [ -z "$RESPONSE" ]; then
+            echo "::error::Failed to connect to RepoSentinel Backend. Is Ngrok running?"
+            exit 1
+          fi
+          
+          # Parse results
+          VERDICT=$(echo $RESPONSE | jq -r '.verdict')
+          SCORE=$(echo $RESPONSE | jq -r '.risk_score')
+          FLAGS=$(echo $RESPONSE | jq -r '.flags | join(", ")')
+          
+          echo "========================================="
+          echo "🛡️ THREAT SCORE : $SCORE/100"
+          echo "🛑 VERDICT      : ${VERDICT^^}"
+          echo "🚩 FLAGS CAUGHT : $FLAGS"
+          echo "========================================="
+          
+          echo "::notice::RepoSentinel Threat Score: $SCORE/100"
+          
+          # Block the PR/Issue if it's malicious
+          if [ "$VERDICT" = "block" ]; then
+            echo "::error title=RepoSentinel Action Blocked::CRITICAL THREAT DETECTED! Flags: $FLAGS"
+            exit 1
+          elif [ "$VERDICT" = "sandbox" ]; then
+            echo "::warning title=RepoSentinel Sandbox Mode::Suspicious pattern detected. Sandboxing agent."
+          else
+            echo "✅ Cleared by RepoSentinel. Safe for Autonomous Agents."
+          fi
