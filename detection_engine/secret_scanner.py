@@ -14,10 +14,11 @@ SECRET_PATTERNS = {
 def scan_for_secrets(text: str) -> dict:
     """
     Scans the given text for exposed secrets or API keys.
-    Returns a score (100 if secret found) and flags.
+    Returns a score, flags, and a sanitized version of the text.
     """
     flags = []
     found_secrets = False
+    sanitized_text = text
     
     for secret_type, pattern in SECRET_PATTERNS.items():
         if re.search(pattern, text):
@@ -26,8 +27,10 @@ def scan_for_secrets(text: str) -> dict:
                 "reason": f"CRITICAL: Exposed {secret_type} detected!"
             })
             found_secrets = True
+            # Auto-Remediation: Redact the secret
+            sanitized_text = re.sub(pattern, f"[REDACTED_{secret_type.upper()}]", sanitized_text)
             
     if found_secrets:
-        return {"score": 100, "flags": flags}
+        return {"score": 100, "flags": flags, "sanitized_text": sanitized_text}
     
-    return {"score": 0, "flags": []}
+    return {"score": 0, "flags": [], "sanitized_text": text}

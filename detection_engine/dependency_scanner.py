@@ -16,9 +16,10 @@ def scan_dependencies(content: str, source_type: str) -> dict:
     """
     flags = []
     score = 0
+    sanitized_text = content
     
     if source_type not in ["package.json", "requirements.txt"]:
-        return {"score": 0, "flags": []}
+        return {"score": 0, "flags": [], "sanitized_text": content}
         
     for bad_pkg, reason in MALICIOUS_PACKAGES.items():
         # Simple string match for requirements or json keys
@@ -28,5 +29,7 @@ def scan_dependencies(content: str, source_type: str) -> dict:
                 "reason": f"CRITICAL: Found dangerous package '{bad_pkg}'. {reason}"
             })
             score = 100
+            # Auto-Remediation: Remove the malicious package
+            sanitized_text = re.sub(rf'"{bad_pkg}"\s*:\s*"[^"]+",?', f'"{bad_pkg}": "[BLOCKED_BY_REPOSENTINEL]",', sanitized_text)
             
-    return {"score": score, "flags": flags}
+    return {"score": score, "flags": flags, "sanitized_text": sanitized_text}

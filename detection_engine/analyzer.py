@@ -69,10 +69,12 @@ def analyze_input(source_type: str, content: str) -> dict:
     secret_results = scan_for_secrets(content)
     
     # 3. Run Dependency Scanner
-    dep_results = scan_dependencies(content, source_type)
+    dep_results = scan_dependencies(secret_results.get("sanitized_text", content), source_type)
     
     # 4. Run LLM checks (for nuanced manipulation attempts)
-    llm_results = get_llm_score(content)
+    llm_results = get_llm_score(dep_results.get("sanitized_text", content))
+    
+    final_sanitized_text = dep_results.get("sanitized_text", content)
     
     # Combine scores (Max of all engines ensures critical threats are blocked)
     final_score = max(
@@ -102,7 +104,8 @@ def analyze_input(source_type: str, content: str) -> dict:
         "risk_score": final_score,
         "verdict": verdict,
         "flags": flag_types,
-        "explanation": explanation_str
+        "explanation": explanation_str,
+        "sanitized_content": final_sanitized_text
     }
 
 if __name__ == "__main__":

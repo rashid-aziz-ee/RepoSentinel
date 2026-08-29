@@ -21,6 +21,9 @@ def send_test(name: str, source_type: str, content: str):
         print(f"🛑 VERDICT      : {result['verdict'].upper()}")
         print(f"🚩 FLAGS CAUGHT : {', '.join(result['flags']) if result['flags'] else 'None'}")
         
+        if result.get('sanitized_content') and result['sanitized_content'] != content:
+            print(f"✨ SANITIZED    : {result['sanitized_content'][:100]}...")
+        
     except requests.exceptions.ConnectionError:
         print("[ERROR] FastAPI backend is not running on port 8000!")
 
