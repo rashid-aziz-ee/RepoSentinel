@@ -50,26 +50,28 @@ jobs:
             -H "ngrok-skip-browser-warning: true" \
             -d "$JSON_PAYLOAD")
           
-          # If connection failed
+          # If connection failed or response is empty
           if [ -z "$RESPONSE" ]; then
             echo "::error::Failed to connect to RepoSentinel Backend. Is Ngrok running?"
             exit 1
           fi
           
-          echo "Raw API Response: $RESPONSE"
+          echo "========================================="
+          echo "RAW RESPONSE FROM NGROK/SERVER:"
+          echo "$RESPONSE"
+          echo "========================================="
           
-          # Parse results securely (avoiding jq exit code 2 if HTML is returned)
-          VERDICT=$(echo "$RESPONSE" | jq -r '.verdict // "unknown"')
-          if [ "$VERDICT" = "unknown" ]; then
-             echo "::error::Failed to parse JSON response. Ensure Ngrok is running and forwarding to the correct port."
+          # Check if response is valid JSON
+          if ! echo "$RESPONSE" | jq -e . >/dev/null 2>&1; then
+             echo "::error::Ngrok did not return valid JSON. This usually means your Ngrok URL has changed, or the local server is down. Check the raw response above!"
              exit 1
           fi
           
+          # Parse results
+          VERDICT=$(echo "$RESPONSE" | jq -r '.verdict // "unknown"')
           SCORE=$(echo "$RESPONSE" | jq -r '.risk_score')
           FLAGS=$(echo "$RESPONSE" | jq -r '.flags | join(", ")')
-
           
-          echo "========================================="
           echo "🛡️ THREAT SCORE : $SCORE/100"
           echo "🛑 VERDICT      : ${VERDICT^^}"
           echo "🚩 FLAGS CAUGHT : $FLAGS"
