@@ -95,6 +95,24 @@ async def get_logs():
         
     return {"logs": logs}
 
+@app.delete("/api/logs/{log_id}")
+async def delete_log(log_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('DELETE FROM logs WHERE id = ?', (log_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Log deleted"}
+
+@app.delete("/api/logs")
+async def clear_all_logs():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('DELETE FROM logs')
+    conn.commit()
+    conn.close()
+    return {"message": "All logs cleared"}
+
 if __name__ == "__main__":
     print("Starting RepoSentinel Backend API on port 8000...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
